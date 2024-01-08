@@ -1,61 +1,39 @@
+import os.path
 import sys
-import os
+import numpy as np
 
-path = os.path.dirname(__file__)
-sys.path.append(path)
 
-from layers import DataLayer
-from nodes import sum_node
-from nodes import mul_node
+from wetrain.models.model_bases.base_model import base_model
+from wetrain.wtensor import wtensor
+from wetrain.operator import matmul
 
-from models.bases.base_model import base_model
+class Linear(base_model):
 
-class LinearModel(base_model):
+    def __init__(self,in_dim,out_dim):
 
-    def __init__(self, input_dim, output_dim):
+        super().__init__()
 
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-
-    def in_concat(self,input:DataLayer):
-
-        if len(input) != self.input_dim:
-            raise ValueError('input dimension mismatch')
-
-        self.input_layer = input
-        self.weights = []
-
-        for index in range(self.output_dim):
-            weight_layer = DataLayer(self.input_dim, require_initialize=True, require_train=True)
-            self.weights.append(weight_layer)
-
-        self.output_layer = DataLayer(self.output_dim, require_train=True)
-
-        self.middle_res = []
-        for index in range(self.output_dim):
-            middle_layer = DataLayer(self.input_dim, require_initialize=False, require_train=True)
-            self.middle_res.append(middle_layer)
-
-        # 将各个层拼接在一起
-        for index in range(self.output_dim):
-            sum_list = []
-
-            for key in range(self.input_dim):
-                mul_node(self.weights[index][key], self.input_layer[key], self.middle_res[index][key])
-                sum_list.append(self.middle_res[index][key])
-            sum_node(sum_list, self.output_layer[index])
-
-    def __getitem__(self, idx):
-        return self.output_layer[idx]
-
-    def out_concat(self):
-        return self.output_layer
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+        self.weight = wtensor(np.random.normal(size=(in_dim,out_dim)))
 
     def params(self):
-        return self.weights
+        return [self.weight]
+
+    def forward(self,x:wtensor):
+
+        if np.shape(x.data)[-1] != self.in_dim:
+            raise ValueError('Input dim not equal to in_dim')
+
+        self.weight.clear_rela() #由于weight是有会被保留的wtensor，所以每次前向传播都需要清除节点信息
+
+        ans = matmul(x,self.weight)
+        return ans
 
 
-
-
-
-
+if __name__ == '__main__':
+    model = Linear(3,2)
+    c = wtensor([[1,2,3],[3,4,5]])
+    b = model(c)
+    print(b.data)
+    b.backward()
